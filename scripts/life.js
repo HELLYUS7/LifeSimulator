@@ -7,19 +7,19 @@ const height = canvas.height;
 var distC = 50;
 var particles = [];
 
-function createParticle(posX,posY,velX,velY,type='stem'){
-  return {posX:posX,posY:posY,velX:velX,velY,velY,type:type};
+function createParticle(posX, posY, velX, velY, type = 'stem', currentTime, energy = 0, physics = false) {
+  return { posX: posX, posY: posY, velX: velX, velY, velY, type: type, currentTime: currentTime, energy: energy, physics: physics };
 }
 
-function createParticles(number){
-  for(let i=0;i<number;i++){
-    const posX = Math.random()*width;
-    const posY = Math.random()*height;
-    particles.push(createParticle(posX,posY,0,0,'nutrients'));
+function createParticles(number) {
+  for (let i = 0; i < number; i++) {
+    const posX = Math.random() * width;
+    const posY = Math.random() * height;
+    particles.push(createParticle(posX, posY, 0, 0, 'nutrients', Date.now()));
   }
 }
 
-function rule(particles1, particles2, g){
+function rule(particles1, particles2, g) {
   for (let i = 0; i < particles1.length; i++) {
     fx = 0;
     fy = 0;
@@ -44,24 +44,24 @@ function rule(particles1, particles2, g){
   }
 };
 
-function verifyDistance(particle1, particle2){
+function verifyDistance(particle1, particle2) {
   const dx = particle1.posX - particle2.posX;
-  const dy = particle1.posY - particle2.posY; 
+  const dy = particle1.posY - particle2.posY;
   return Math.sqrt(dx * dx + dy * dy)
 }
 
-function verifyDistanceParticles(particle, distance){
-  let counters = {'nutrients':[],'mother':[],'membrane':[],'stem':[]};
+function verifyDistanceParticles(particle, distance) {
+  let counters = { 'nutrients': [], 'mother': [], 'membrane': [], 'stem': [] };
   particles.forEach(
     (currentParticle) => {
       const dist = verifyDistance(currentParticle, particle);
-      if(dist <= distance){
+      if (dist <= distance) {
         /*if(currentParticle !== particle){
           counters[currentParticle.type].push(currentParticle);
         }*/
 
         counters[currentParticle.type].push(currentParticle);
-      }else{
+      } else {
         //currentParticle.type = 'nutrients';
       }
     }
@@ -69,23 +69,24 @@ function verifyDistanceParticles(particle, distance){
   return counters;
 }
 
-function contParticles(particle, dist){
+function contParticles(particle, dist) {
   particle.type = 'mother'
   verifyDistanceParticles(particle, dist);
 }
 
-function particlesActions(){
+function particlesActions() {
   const max = 1;
   const min = -2;
   particles.forEach(
     (particle) => {
+      particle.currentTime = Date.now();
       let particlesClose = {};
       let velX = 0;
       let velY = 0;
-      switch(particle.type){
+      switch (particle.type) {
         case 'nutrients':
           particlesClose = verifyDistanceParticles(particle, 1);
-          if(particlesClose['nutrients'].length >= 3){
+          if (particlesClose['nutrients'].length >= 3) {
             console.log(particlesClose);
             particlesClose['nutrients'].forEach(
               (particle) => {
@@ -99,10 +100,10 @@ function particlesActions(){
           particle.posY += velY;
           if (particle.x <= 0 || particle.x >= width) { particle.vx *= -1; }
           if (particle.y <= 0 || particle.y >= height) { particle.vy *= -1; }
-        break;
+          break;
         case 'stem':
           particlesClose = verifyDistanceParticles(particle, 40);
-          if(particlesClose['stem'].length >= 6){
+          if (particlesClose['stem'].length >= 6) {
             console.log(particlesClose);
             particlesClose['stem'].forEach(
               (currentParticle) => {
@@ -116,62 +117,111 @@ function particlesActions(){
           particle.posY += velY;
           if (particle.x <= 0 || particle.x >= width) { particle.vx *= -1; }
           if (particle.y <= 0 || particle.y >= height) { particle.vy *= -1; }
-        break;
+          break;
         case 'mother':
           particlesClose = verifyDistanceParticles(particle, 40);
-          rule(particlesClose['mother'], particlesClose['mother'], -0.01);
-        break;
+          if (particlesClose['mother'].length <= 2) {
+            if (Date.now() - particle.currentTime <= 2000) {
+              particle.type = 'nutrients';
+            }
+          } else {
+            particle.currentTime = Date.now();
+          }
+
+          if (particlesClose['membrane'].length <= 10) {
+            particlesClose['stem'].forEach(
+              (currentParticle) => {
+                currentParticle.type = 'membrane';
+              }
+            );
+          }
+
+          if (!particle.physics) {
+            rule(particlesClose['mother'], particlesClose['mother'], particlesClose['mother'].length <= 5 ? -0.01 : 0.005);
+          }
+          break;
+        case 'membrane':
+          particlesClose = verifyDistanceParticles(particle, 40);
+          if (particlesClose['mother'].length <= 0) {
+            if (Date.now() - particle.currentTime <= 1000) {
+              particle.type = 'nutrients';
+            }
+          } else {
+            particle.currentTime = Date.now();
+            /*if (particlesClose['nutrients'].length >= 0) {
+              for (let i = 0; i <= particlesClose['nutrients']; i++) {
+                particlesClose['nutrients'][i] = null;
+                particlesClose['mother'][Math.floor(Math.random() * particlesClose['mother'].length)].energy++;
+              }
+            }*/
+          }
+
+          if (!particle.physics) {
+            rule(particlesClose['membrane'], particlesClose['membrane'], 0.1);
+            rule(particlesClose['membrane'], particlesClose['mother'], -8);
+          }
+          break;
       }
     }
   );
 }
 
-function draw(){
+function draw() {
   let color = 'white';
-
-  ctx.clearRect(0,0,width,height);
+  let size = 2;
+  ctx.clearRect(0, 0, width, height);
 
   particles.forEach(
     (particle) => {
-      switch(particle.type){
+      switch (particle.type) {
         case 'stem':
           color = '#ffff00';
-        break;
+          size = 3;
+          break;
         case 'nutrients':
           color = '#0080ff';
-        break;
+          size = 2;
+          break;
         case 'mother':
           color = '#ff00fb';
-        break;
+          size = 5;
+          break;
         case 'membrane':
           color = '#00ff08';
-        break;
+          size = 3;
+          break;
         default:
           color = 'white';
-        break;
+          size = 4;
+          break;
       }
-    ctx.shadowColor = color;
-    ctx.shadowBlur = 10;
-    
-    ctx.fillStyle = color;
-    ctx.fillRect(particle.posX, particle.posY, 4, 4);
+      ctx.shadowColor = color;
+      ctx.shadowBlur = 10;
 
+      /*ctx.fillStyle = color;
+      ctx.fillRect(particle.posX, particle.posY, size, size);*/
 
-    ctx.shadowColor = 'transparent';
-    ctx.shadowBlur = 0;
+      ctx.beginPath();
+      ctx.fillStyle = color;
+      ctx.arc(particle.posX, particle.posY, size, 0, Math.PI * 2, true);
+      ctx.fill();
+      ctx.closePath();
+
+      ctx.shadowColor = 'transparent';
+      ctx.shadowBlur = 0;
 
     }
   )
 }
 
 
-function update(){
+function update() {
   draw();
   particlesActions();
   requestAnimationFrame(update);
 }
 
-function startSimulation(){
+function startSimulation() {
   createParticles(1000);
   return update();
 }
